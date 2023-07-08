@@ -66,4 +66,4 @@ To deploy canister
 dfx deploy
 ```
 
-This deploy command builds, and installs the canister
+This deploy command builds, and installs the canister.
