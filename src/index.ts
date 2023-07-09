@@ -32,6 +32,13 @@ type Lottery = Record<{
 type lotteryPayload = Record<{
     ticketPrice: nat64;
     lotteryDuration: nat64;
+    admin: string;
+}>
+
+//Define Winner record
+type Winner= Record<{
+    id :Principal;
+    amount: nat64;
 }>
 
 // player index mapping to show which lottery they participated in which they hold in tickets
@@ -41,15 +48,19 @@ let playerIndexMap = new StableBTreeMap<Principal, Vec<string>>(0, 100, 1_000_00
 let indexToPosnMap = new StableBTreeMap<string, int32>(1, 50, 8)
 
 // custom configuration settings
-let currlotteryId : Opt<int32> = Opt.None;
+let currlotteryId: Opt<int32> = Opt.None;
 
-let lotteryState : Opt<int8> = Opt.None;
+let lotteryState: Opt<int8> = Opt.None;
 
-let ticketPrice : Opt<nat64> = Opt.None;
+let ticketPrice: Opt<nat64> = Opt.None;
 
 let lotteryDuration: Opt<nat64> = Opt.None;
 
 let prizePool: Opt<nat64> = Opt.None;
+
+let lotteryAdmin: Principal;
+
+let previousWinners: Vec<Winner>=[];
 
 // address of the icp caninster -- update when running yours
 const icpCanister = new Ledger(
@@ -67,6 +78,7 @@ export function constructor(payload: lotteryPayload): void{
     lotteryState = Opt.Some(0);
     ticketPrice = Opt.Some(payload.ticketPrice);
     lotteryDuration = Opt.Some(payload.lotteryDuration);
+    lotteryAdmin = Principal.fromText(payload.admin);
 }
 
 // query to return lottery information 
@@ -81,6 +93,10 @@ export function getLottery(id: int32): Result<Lottery, string> {
 // start lottery function
 $update;
 export function startLottery(): Result<string, string> {
+    const caller = ic.caller();
+    if(caller !== lotteryAdmin){
+        ic.trap("You are not authorized to start the lottery");
+    }
 
     // check lottery state, and fail if state is not initialized
     const state = match(lotteryState, {
@@ -269,6 +285,11 @@ function generatePlayerInformation(lotteryId: int32, newPlayerId: int32, ticketN
 $update;
 export async function endLottery(id: int32): Promise<Result<string, string>> {
 
+    const caller = ic.caller();
+    if(caller !== lotteryAdmin){
+        ic.trap("You are not authorized to end the lottery");
+    }
+
     // check lottery state and fail if not yet initialized
     const state = match(lotteryState, {
         Some: (state) => state,
@@ -394,6 +415,11 @@ export async function checkIfWinner(id: int32): Promise<Result<string, string>> 
 
 $update;
 export function deleteLottery(id: int32): Result<string, string> {
+    const caller = ic.caller();
+    if(caller !== lotteryAdmin){
+        ic.trap("You are not authorized to end the lottery");
+    }
+
     return match(lotteryStorage.remove(id), {
         Some: (_deletedLottery) => {
 
@@ -450,6 +476,12 @@ async function makePayment(id: int32, amount: nat64) {
 
 // payment function to transfer rewards to winner
 async function payWinner(id: int32, amount: nat64, winner: string) {
+
+    const caller = ic.caller();
+    if(caller !== lotteryAdmin){
+        ic.trap("You are not authorized to call this function");
+    }
+
     let subAccount: blob = binaryAddressFromPrincipal(ic.id(), Number(id))
     const transferResult = await icpCanister.transfer(
         {
@@ -469,7 +501,21 @@ async function payWinner(id: int32, amount: nat64, winner: string) {
     if(transferResult.Err){
         ic.trap(transferResult.Err.toString())
     }
+    //add the winner to the list of previous winners
+    let latestWinner = {
+        id: Principal.fromText(winner),
+        amount : amount,
+    }
+    previousWinners.push(latestWinner)
 }
+
+//get all previous winners
+$query;
+export function getPreviousWiinners(): Vec<Winner>{
+    return previousWinners;
+}
+
+
 
 function generateUniqueNumber(principal: Principal): number {
     const uint8Array = principal.toUint8Array();
