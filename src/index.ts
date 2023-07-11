@@ -102,7 +102,7 @@ export function startLottery(): Result<string, string> {
     // get lottery duration 
     let duration = match(lotteryDuration, {
         Some: (duration) => duration,
-        None: () => BigInt(0)
+        None: () => ic.trap("cannot start lottery duration not set")
     })
 
     // update lottery id
@@ -149,7 +149,7 @@ export async function buyTicket(id: int32, noOfTickets: int32): Promise<Result<s
     // get ticketprice and estimate amount to be transfered then update the prizepool 
     let price = match(ticketPrice, {
         Some: (price) => price,
-        None: () => BigInt(0),
+        None: () => ic.trap("cannot buy tickets price not set"),
     })
     const amountToPay = BigInt(noOfTickets) * price;
     match(prizePool, {
@@ -421,7 +421,7 @@ async function makePayment(id: int32, amount: nat64) {
 
     const uniqueNumber = generateUniqueNumber(ic.caller())
 
-    const fromSubAccount: blob = binaryAddressFromPrincipal(ic.id(),uniqueNumber)
+    const fromSubAccount: blob = binaryAddressFromPrincipal(ic.caller(), uniqueNumber)
 
     const balance  = (await icpCanister.account_balance({account:fromSubAccount}).call()).Ok?.e8s
     
