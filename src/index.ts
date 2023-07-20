@@ -1,4 +1,4 @@
-import { $query, $update, Record, StableBTreeMap, blob, Principal, match, Result, nat64, ic, Opt, int8, int32, $init, Vec } from 'azle';
+import { $query, $update, Record, StableBTreeMap, blob, Principal, match, Result, nat64, ic, Opt, int8, int32, $init, Vec, Tuple } from 'azle';
 import { v4 as uuidv4 } from 'uuid';
 import {
     Address,
@@ -53,17 +53,24 @@ let prizePool: Opt<nat64> = Opt.None;
 
 // address of the icp caninster -- update when running yours
 const icpCanister = new Ledger(
-    Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"
+    Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai"
     )
 );
 
 // mapping to hold storage information 
 const lotteryStorage = new StableBTreeMap<int32, Lottery>(2, 8, 5_000_000);
 
-
 // init function to set the lottery state, ticket price and lottery duration
 $init
 export function constructor(payload: lotteryPayload): void{
+    lotteryState = Opt.Some(0);
+    ticketPrice = Opt.Some(payload.ticketPrice);
+    lotteryDuration = Opt.Some(payload.lotteryDuration);
+}
+
+// for some reason init function doesn't work
+$update
+export function init(payload: lotteryPayload): void{
     lotteryState = Opt.Some(0);
     ticketPrice = Opt.Some(payload.ticketPrice);
     lotteryDuration = Opt.Some(payload.lotteryDuration);
@@ -76,6 +83,11 @@ export function getLottery(id: int32): Result<Lottery, string> {
         Some: (lottery) => Result.Ok<Lottery, string>(lottery),
         None: () => Result.Err<Lottery, string>(`Lottery with id=${id} not found`)
     });
+}
+
+$query;
+export function getLotteryConfiguration(): Tuple<[Opt<int32>,  Opt<int8>, Opt<nat64>,  Opt<nat64>, Opt<nat64>]>{
+    return [currlotteryId, lotteryState, ticketPrice, lotteryDuration, prizePool ]
 }
 
 // start lottery function

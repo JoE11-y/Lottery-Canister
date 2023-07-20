@@ -1,28 +1,8 @@
-type Lottery = record {
-  id : int32;
-  startTime : nat64;
-  endTime : nat64;
-  winner : principal;
-  winningTicket : int32;
-  players : vec Player;
-  noOfTickets : int32;
-  lotteryCompleted : int32;
-};
-type ManualReply = variant { Ok : text; Err : text };
-type Player = record {
-  id : int32;
-  tickets : vec int32;
-  player : principal;
-  lotteryId : int32;
-};
-type _AzleResult = variant { Ok : text; Err : text };
-type _AzleResult_1 = variant { Ok : Lottery; Err : text };
-type lotteryPayload = record { lotteryDuration : nat64; ticketPrice : nat64 };
-service : (lotteryPayload) -> {
-  buyTicket : (int32, int32) -> (ManualReply);
-  checkIfWinner : (int32) -> (ManualReply);
-  deleteLottery : (int32) -> (_AzleResult);
-  endLottery : (int32) -> (_AzleResult);
-  getLottery : (int32) -> (_AzleResult_1) query;
-  startLottery : () -> (_AzleResult);
+type Reaction = variant { Fire; Wave };
+type User = record { id : text };
+service : (User, Reaction, principal) -> {
+  getOwner : () -> (opt principal) query;
+  getReaction : () -> (opt Reaction) query;
+  getUser : () -> (opt User) query;
+  setData : () -> ();
 }
