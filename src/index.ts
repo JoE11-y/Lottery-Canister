@@ -53,7 +53,7 @@ let prizePool: Opt<nat64> = Opt.None;
 
 // address of the icp caninster -- update when running yours
 const icpCanister = new Ledger(
-    Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai"
+    Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"
     )
 );
 
