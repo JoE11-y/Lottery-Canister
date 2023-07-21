@@ -63,7 +63,7 @@ dfx canister install --all
 To deploy canister
 
 ```bash
-dfx deploy lottery --argument '(record {ticketPrice = {price in bigint(e.g 3n)}; lotteryDuration = {duration in nanoseconds} })'
+dfx deploy
 ```
 
 This deploy command builds, and installs the canister.
