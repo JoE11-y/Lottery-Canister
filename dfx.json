@@ -1,13 +1,21 @@
 {
   "canisters": {
     "lottery": {
-      "main": "src/index.ts",
-      "type": "custom",
-      "build": "npx azle lottery",
-      "root": "src",
-      "ts": "src/index.ts",
-      "candid": "src/index.did",
-      "wasm": ".azle/lottery/lottery.wasm.gz"
+        "type": "custom",
+        "build": "npx azle lottery",
+        "root": "src/lotteryCanister",
+        "ts": "src/lotteryCanister/index.ts",
+        "candid": "src/lotteryCanister/index.did",
+        "wasm": ".azle/lottery/lottery.wasm.gz"
+    },
+    "token": {
+        "type": "custom",
+        "build": "npx azle token",
+        "root": "src/tokenCanister",
+        "ts": "src/tokenCanister/index.ts",
+        "candid": "src/tokenCanister/index.did",
+        "wasm": ".azle/token/token.wasm.gz"
     }
-  }
 }
+}
+

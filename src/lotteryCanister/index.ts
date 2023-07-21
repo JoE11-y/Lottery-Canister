@@ -1,44 +1,21 @@
-import { $query, $update, Record, StableBTreeMap, blob, Principal, match, Result, nat64, ic, Opt, int8, int32, $init, Vec, Tuple } from 'azle';
+import { $query, $update, StableBTreeMap, Principal, match, Result, nat64, ic, Opt, int8, int32, Vec } from 'azle';
 import { v4 as uuidv4 } from 'uuid';
-import {
-    Address,
-    binaryAddressFromPrincipal,
-    hexAddressFromPrincipal,
-    binaryAddressFromAddress,
-    Ledger,
-} from 'azle/canisters/ledger';
+import { Player, Lottery, lotteryPayload, buyTicketPayload, queryPayload, Token, addressPayload, LotteryConfiguration } from '../types';
 
-// define player record
-type Player = Record<{
-    id: int32;
-    lotteryId: int32;
-    player: Principal;
-    tickets: Vec<int32>;
-}>
 
-// define lottery record
-type Lottery = Record<{
-    id: int32;
-    startTime: nat64;
-    endTime: nat64;
-    noOfTickets: int32;
-    winner: Principal;
-    winningTicket: int32;
-    players: Vec<Player>;
-    lotteryCompleted: int32;
-}>
+const tokenCanister = new Token(
+    // input your token canister address
+    Principal.fromText("")
+);
 
-// define lottery payload record
-type lotteryPayload = Record<{
-    ticketPrice: nat64;
-    lotteryDuration: nat64;
-}>
+// input your lottery canister address
+const lotteryCanister = "" 
 
 // player index mapping to show which lottery they participated in which they hold in tickets
 let playerIndexMap = new StableBTreeMap<Principal, Vec<string>>(0, 100, 1_000_000);
 
 // follow up mapping that connects the player unique id, to player position in lotteries
-let indexToPosnMap = new StableBTreeMap<string, int32>(1, 50, 8)
+let indexToPosnMap = new StableBTreeMap<string, int32>(1, 60, 100)
 
 // custom configuration settings
 let currlotteryId : Opt<int32> = Opt.None;
@@ -51,29 +28,26 @@ let lotteryDuration: Opt<nat64> = Opt.None;
 
 let prizePool: Opt<nat64> = Opt.None;
 
-// address of the icp caninster -- update when running yours
-const icpCanister = new Ledger(
-    Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai"
-    )
-);
-
 // mapping to hold storage information 
-const lotteryStorage = new StableBTreeMap<int32, Lottery>(2, 8, 5_000_000);
+const lotteryStorage = new StableBTreeMap<int32, Lottery>(2, 100, 5_000_000);
 
-// init function to set the lottery state, ticket price and lottery duration
-$init
-export function constructor(payload: lotteryPayload): void{
-    lotteryState = Opt.Some(0);
-    ticketPrice = Opt.Some(payload.ticketPrice);
-    lotteryDuration = Opt.Some(payload.lotteryDuration);
-}
-
-// for some reason init function doesn't work
+// for some reason $init doesn't work
 $update
-export function init(payload: lotteryPayload): void{
+export async function initializeLottery(payload: lotteryPayload):  Promise<Result<string, string>>{
+    // check lottery state, and fail if state is already initialized
+    match(lotteryState, {
+        Some: (state) =>  ic.trap(`Lottery already initialized iand is in ${state}`),
+        None: () => 0,
+    })
+
     lotteryState = Opt.Some(0);
     ticketPrice = Opt.Some(payload.ticketPrice);
     lotteryDuration = Opt.Some(payload.lotteryDuration);
+
+    //set up tokens for lottery
+    await tokenCanister.initializeSupply('ICToken', lotteryCanister,'ICT', 1_000_000_000_000n).call();
+
+    return Result.Ok<string, string>("Lottery Initialized");
 }
 
 // query to return lottery information 
@@ -86,8 +60,8 @@ export function getLottery(id: int32): Result<Lottery, string> {
 }
 
 $query;
-export function getLotteryConfiguration(): Tuple<[Opt<int32>,  Opt<int8>, Opt<nat64>,  Opt<nat64>, Opt<nat64>]>{
-    return [currlotteryId, lotteryState, ticketPrice, lotteryDuration, prizePool ]
+export function getLotteryConfiguration(): LotteryConfiguration{
+    return {currlotteryId, lotteryState, ticketPrice, lotteryDuration, prizePool}
 }
 
 // start lottery function
@@ -126,7 +100,7 @@ export function startLottery(): Result<string, string> {
         startTime: ic.time(), 
         endTime: ic.time() + duration, 
         noOfTickets: 0,
-        winner: Principal.fromText("be2us-64aaa-aaaaa-qaabq-cai"),
+        winner: Principal.fromText("bkyz2-fmaaa-aaaaa-qaaaq-cai"),
         winningTicket: 0,
         players: [],
         lotteryCompleted: 0
@@ -142,7 +116,7 @@ export function startLottery(): Result<string, string> {
 }
 
 $update;
-export async function buyTicket(id: int32, noOfTickets: int32): Promise<Result<string, string>> {
+export async function buyTicket(payload: buyTicketPayload): Promise<Result<string, string>> {
 
     // check lottery state and fail if not yet initialized
     const state = match(lotteryState, {
@@ -155,6 +129,9 @@ export async function buyTicket(id: int32, noOfTickets: int32): Promise<Result<s
         ic.trap("cannot buy ticket now")
     }
 
+    let id = payload.lotteryId;
+    let noOfTickets = payload.noOfTickets;
+
     // set caller 
     let caller = ic.caller()
     
@@ -163,13 +140,17 @@ export async function buyTicket(id: int32, noOfTickets: int32): Promise<Result<s
         Some: (price) => price,
         None: () => ic.trap("cannot buy tickets price not set"),
     })
-    const amountToPay = BigInt(noOfTickets) * price;
+    const amountToPay = BigInt(payload.noOfTickets) * price;
+
+    // send ticket payment to icp contract
+    let status = (await tokenCanister.transfer(caller.toString(), lotteryCanister, amountToPay).call()).Ok;   
+
     match(prizePool, {
         Some: (pool) => {
             prizePool = Opt.Some(pool + amountToPay)
         },
         None: () => {
-            prizePool = Opt.Some(BigInt(0) + amountToPay)
+            prizePool = Opt.Some(0n + amountToPay)
         } ,
     })
 
@@ -181,106 +162,116 @@ export async function buyTicket(id: int32, noOfTickets: int32): Promise<Result<s
             if(lottery.endTime < ic.time()){
                 ic.trap("lottery over can't buy tickets")
             }
-
-            // send ticket payment to icp contract
-            await makePayment(id, amountToPay)
             
-            // generate ticket numbers and assign tickets to their ticketIds
-            const ticketNumbers: Vec<int32> = []
-            let oldTicketsCount = lottery.noOfTickets;
-            let newTicketId = oldTicketsCount;
-            while (newTicketId < (noOfTickets + oldTicketsCount)) {
-                ticketNumbers.push(newTicketId);
-                newTicketId += 1;
-            }
-
-            let empty : Vec<string> = [];
-
-            // generate lottery track identifier
-            const idTrack = `"${id}"`;
-
-            // check mapping to get player lottery participation unique id arrays
-            let playerIdMap = match(playerIndexMap.get(caller),{
-                    Some: (list) => list,
-                    None: () => empty
-            })
-            
-            let playerInfos: Player[] = lottery.players;
-
-            // check if player's participation array is empty
-            if(playerIdMap.length == 0){
-                // if empty create new information for player
-                let newId = `${uuidv4() + idTrack}`;
-                let newPlayerPosn =  playerInfos.length + 1;
-
-                // update player information with new unique id
-                playerIdMap.push(newId)
-                playerIndexMap.insert(caller, playerIdMap);
-                indexToPosnMap.insert(newId, newPlayerPosn)
+            // if payment successfull
+            if(status){
+                // generate ticket numbers and assign tickets to their ticketIds
+                const ticketNumbers: Vec<int32> = []
                 
-                // get player info and add to lottery player array
-                let playerInfo = generatePlayerInformation(id, newPlayerPosn, ticketNumbers)
-                playerInfos.push(playerInfo)
-            }else{
-                let playerPosn: int32;
-                let uniqueId: string = "";
+                let oldTicketsCount = lottery.noOfTickets;
+                
+                let newTicketId = oldTicketsCount;
+                
+                while (newTicketId < (noOfTickets + oldTicketsCount)) {
+                    ticketNumbers.push(newTicketId);
+                    newTicketId += 1;
+                }
 
-                // check if player already has uniqueId 
-                for (let i of playerIdMap){
-                    if(i.includes(`${idTrack}`)){
-                        uniqueId = i;
-                        break;
+                let empty : Vec<string> = [];
+
+                // generate lottery track identifier
+                const idTrack = `#${id}#`;
+
+                // check mapping to get player lottery participation unique id arrays
+                let playerIdMap = match(playerIndexMap.get(caller),{
+                        Some: (list) => list,
+                        None: () => empty
+                })
+                
+                let playerInfos: Player[] = lottery.players;
+
+                // check if player's participation array is empty
+                if(playerIdMap.length == 0){
+                    // if empty create new information for player
+                    let newId = `${uuidv4() + idTrack}`;
+                    let newPlayerPosn =  playerInfos.length + 1;
+
+                    // update player information with new unique id
+                    playerIdMap.push(newId)
+                    playerIndexMap.insert(caller, playerIdMap);
+                    indexToPosnMap.insert(newId, newPlayerPosn)
+                    
+                    // get player info and add to lottery player array
+                    let playerInfo = generatePlayerInformation(id, caller, newPlayerPosn, ticketNumbers)
+                    playerInfos.push(playerInfo)
+                }else{
+                    let playerPosn: int32;
+                    let uniqueId: string = "";
+
+                    // check if player already has uniqueId 
+                    for (let i of playerIdMap){
+                        // console.log(i);
+                        if(i.includes(`${idTrack}`)){
+                            uniqueId = i;
+                            break;
+                        }
+                    }
+
+                    // then get the player position
+                    playerPosn = match(indexToPosnMap.get(uniqueId), {
+                        Some: (posn) => posn,
+                        None: () => 0
+                    })
+
+                    // console.log(playerPosn)
+                    // console.log(uniqueId)
+
+                    // check if unique id not present or playerPosn is 0
+                    if(uniqueId == "" && playerPosn == 0){
+                        // generate new id and update the player mapping informations
+                        let newId = `${uuidv4() + idTrack}`;
+                        let newPlayerPosn = playerInfos.length + 1;
+                        playerIdMap.push(newId);
+                        playerIndexMap.insert(caller, playerIdMap);
+                        indexToPosnMap.insert(newId, newPlayerPosn)
+                        let playerInfo = generatePlayerInformation(id, caller, newPlayerPosn, ticketNumbers)
+                        playerInfos.push(playerInfo)
+                    }else{
+                        // else just add ticketNumbers to player tickets array
+                        playerInfos[playerPosn].tickets = [...playerInfos[playerPosn].tickets, ...ticketNumbers];
                     }
                 }
 
-                // then get the player position
-                playerPosn = match(indexToPosnMap.get(uniqueId), {
-                    Some: (posn) => posn,
-                    None: () => 0
-                })
-
-                // check if unique id not present or playerPosn is 0
-                if(uniqueId == "" && playerPosn == 0){
-                    // generate new id and update the player mapping informations
-                    let newId = `${uuidv4() + idTrack}`;
-                    let newPlayerPosn = playerInfos.length + 1;
-                    playerIdMap.push(newId);
-                    playerIndexMap.insert(caller, playerIdMap);
-                    indexToPosnMap.insert(newId, newPlayerPosn)
-                    let playerInfo = generatePlayerInformation(id, newPlayerPosn, ticketNumbers)
-                    playerInfos.push(playerInfo)
-                }else{
-                    // else just add ticketNumbers to player tickets array
-                    playerInfos[playerPosn].tickets = [...playerInfos[playerPosn].tickets, ...ticketNumbers];
-                }
+                // update record in storage
+                const updatedLottery: Lottery = { 
+                    ...lottery,
+                    noOfTickets: lottery.noOfTickets + noOfTickets,
+                    players: playerInfos
+                };
+                lotteryStorage.insert(lottery.id, updatedLottery);
+                return Result.Ok<string, string>("Ticket bought successfully");
             }
-
-            // update record in storage
-            const updatedLottery: Lottery = { 
-                ...lottery,
-                noOfTickets: lottery.noOfTickets + noOfTickets,
-                players: playerInfos
-            };
-            lotteryStorage.insert(lottery.id, updatedLottery);
-            return Result.Ok<string, string>("Ticket bought successfully");
+            else{
+                return Result.Err<string, string>("Ticket purchase failed");
+            }
         },
         None: () => Result.Err<string, string>(`Ticket purchase failed`)
     });
 }
 
-function generatePlayerInformation(lotteryId: int32, newPlayerId: int32, ticketNumbers: Vec<int32>): Player {
+function generatePlayerInformation(lotteryId: int32, caller: Principal, newPlayerId: int32, ticketNumbers: Vec<int32>): Player {
     const newPlayer: Player = {
             id: newPlayerId,
             lotteryId: lotteryId,
-            player: ic.caller(),
+            player: caller,
             tickets: ticketNumbers
     }
     return newPlayer
 }
 
 $update;
-export async function endLottery(id: int32): Promise<Result<string, string>> {
-
+export async function endLottery(payload: queryPayload): Promise<Result<string, string>> {
+    let id = payload.lotteryId;
     // check lottery state and fail if not yet initialized
     const state = match(lotteryState, {
         Some: (state) => state,
@@ -321,19 +312,21 @@ export async function endLottery(id: int32): Promise<Result<string, string>> {
 }
 
 $update;
-export async function checkIfWinner(id: int32): Promise<Result<string, string>> {
-
+export async function checkIfWinner(payload: queryPayload): Promise<Result<string, string>> {
+    let id = payload.lotteryId;
     // check lottery state and fail if not yet initialized
     if(lotteryState == Opt.None){
         ic.trap("lottery not yet intialized")
     }
+
+    const caller = ic.caller()
 
     const pool =  match(prizePool, {
         Some: (pool) => pool,
         None: () => ic.trap("Lottery pool is empty"),
     })
     // calculate winners reward
-    const winnersReward = pool / BigInt(2);
+    const winnersReward = pool / 2n;
 
     // update prize pool
     prizePool = Opt.Some(pool - winnersReward);
@@ -345,12 +338,11 @@ export async function checkIfWinner(id: int32): Promise<Result<string, string>> 
             if(lottery.lotteryCompleted !== 1){
                 ic.trap("lottery not yet ended")
             }
-
-            const caller = ic.caller()
+            
             let uniqueId: string = "";
 
             // generate lottery track identifier
-            const idTrack = `"${id}"`;
+            const idTrack =  `#${id}#`;
 
             // check mapping to get player lottery participation unique id arrays
             let playerIdMap = match(playerIndexMap.get(caller),{
@@ -384,8 +376,8 @@ export async function checkIfWinner(id: int32): Promise<Result<string, string>> 
             // check if player tickets for that lottery contains the winning ticket
             if(playerInfo.tickets.includes(lottery.winningTicket)){
                 // initiate payout to winner
-                const winnerAddress = getAddressToDeposit(playerInfo.player)
-                await payWinner(id, winnersReward, winnerAddress)
+                // send ticket payment to icp contract
+                await tokenCanister.transfer(lotteryCanister, caller.toString(), winnersReward).call();   
             }else{
                 ic.trap("Sorry you're not winner")
             }
@@ -405,7 +397,8 @@ export async function checkIfWinner(id: int32): Promise<Result<string, string>> 
 }
 
 $update;
-export function deleteLottery(id: int32): Result<string, string> {
+export function deleteLottery(payload: queryPayload): Result<string, string> {
+    let id = payload.lotteryId;
     return match(lotteryStorage.remove(id), {
         Some: (_deletedLottery) => {
 
@@ -420,74 +413,24 @@ export function deleteLottery(id: int32): Result<string, string> {
 }
 
 // Helper functions
-function getAddressToDeposit(account: Principal):Address {
-    const uniqueNumber = generateUniqueNumber(account)
-    const address: Address = hexAddressFromPrincipal(account, uniqueNumber)
-    return(address)
-}
-
-
-// payment function to deposit icp to cannister
-async function makePayment(id: int32, amount: nat64) {
-    const toSubAccount: blob = binaryAddressFromPrincipal(ic.id(), Number(id))
-
-    const uniqueNumber = generateUniqueNumber(ic.caller())
-
-    const fromSubAccount: blob = binaryAddressFromPrincipal(ic.caller(), uniqueNumber)
-
-    const balance  = (await icpCanister.account_balance({account:fromSubAccount}).call()).Ok?.e8s
-    
-    if(balance !== undefined && balance > amount){
-        const transfer = await icpCanister.transfer(
-            {
-                memo: 0n,
-                amount: {
-                    e8s: amount
-                },
-                fee:{
-                    e8s: 10000n
-                },
-                from_subaccount: Opt.Some(fromSubAccount),
-                to: toSubAccount,
-                created_at_time: Opt.None
-            }
-        ).call()
-        if(transfer.Err){
-            ic.trap(transfer.Err.toString())
-        }
-    } else{
-        ic.trap("Fund the subAccount first")
+$update
+export async function getFaucetTokens(): Promise<Result<boolean, string>>{
+    const caller = ic.caller();
+    const returnVal = (await tokenCanister.balance(caller.toString()).call()).Ok;
+    const balance = returnVal? returnVal : 0n;
+    if(balance > 0n){
+        ic.trap("To prevent faucet drain, please utilize your existing tokens");
     }
+    return await tokenCanister.transfer(lotteryCanister, caller.toString(), 100n).call();   
 }
 
-// payment function to transfer rewards to winner
-async function payWinner(id: int32, amount: nat64, winner: string) {
-    let subAccount: blob = binaryAddressFromPrincipal(ic.id(), Number(id))
-    const transferResult = await icpCanister.transfer(
-        {
-            memo: 0n,
-            amount: {
-                e8s: amount
-            },
-            fee:{
-                e8s: 10000n
-            },
-            from_subaccount: Opt.Some(subAccount),
-            to: binaryAddressFromAddress(winner),
-            created_at_time: Opt.None
-        }
-    ).call()
-
-    if(transferResult.Err){
-        ic.trap(transferResult.Err.toString())
+$update;
+export async function walletBalance(payload: addressPayload): Promise<Result<nat64, string>> {
+    let address = payload.address
+    if(address == ""){
+        address = ic.caller().toString();
     }
-}
-
-function generateUniqueNumber(principal: Principal): number {
-    const uint8Array = principal.toUint8Array();
-    const bigIntValue = BigInt("0x" + Array.from(uint8Array).map(byte => byte.toString(16).padStart(2, "0")).join(""));
-    const uniqueNumber = Number(bigIntValue);
-    return uniqueNumber;
+    return await tokenCanister.balance(address).call();
 }
 
 // a workaround to make uuid package work with Azle

@@ -1,0 +1,44 @@
+type Lottery = record {
+  id : int32;
+  startTime : nat64;
+  endTime : nat64;
+  winner : principal;
+  winningTicket : int32;
+  players : vec Player;
+  noOfTickets : int32;
+  lotteryCompleted : int32;
+};
+type LotteryConfiguration = record {
+  currlotteryId : opt int32;
+  lotteryDuration : opt nat64;
+  lotteryState : opt int8;
+  ticketPrice : opt nat64;
+  prizePool : opt nat64;
+};
+type ManualReply = variant { Ok : text; Err : text };
+type ManualReply_1 = variant { Ok : bool; Err : text };
+type ManualReply_2 = variant { Ok : nat64; Err : text };
+type Player = record {
+  id : int32;
+  tickets : vec int32;
+  player : principal;
+  lotteryId : int32;
+};
+type _AzleResult = variant { Ok : text; Err : text };
+type _AzleResult_1 = variant { Ok : Lottery; Err : text };
+type addressPayload = record { address : text };
+type buyTicketPayload = record { lotteryId : int32; noOfTickets : int32 };
+type lotteryPayload = record { lotteryDuration : nat64; ticketPrice : nat64 };
+type queryPayload = record { lotteryId : int32 };
+service : () -> {
+  buyTicket : (buyTicketPayload) -> (ManualReply);
+  checkIfWinner : (queryPayload) -> (ManualReply);
+  deleteLottery : (queryPayload) -> (_AzleResult);
+  endLottery : (queryPayload) -> (_AzleResult);
+  getFaucetTokens : () -> (ManualReply_1);
+  getLottery : (int32) -> (_AzleResult_1) query;
+  getLotteryConfiguration : () -> (LotteryConfiguration) query;
+  initializeLottery : (lotteryPayload) -> (_AzleResult);
+  startLottery : () -> (_AzleResult);
+  walletBalance : (addressPayload) -> (ManualReply_2);
+}
