@@ -142,9 +142,6 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
     })
     const amountToPay = BigInt(payload.noOfTickets) * price;
 
-    // send ticket payment to icp contract
-    let status = (await tokenCanister.transfer(caller.toString(), lotteryCanister, amountToPay).call()).Ok;   
-
     match(prizePool, {
         Some: (pool) => {
             prizePool = Opt.Some(pool + amountToPay)
@@ -162,6 +159,9 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
             if(lottery.endTime < ic.time()){
                 ic.trap("lottery over can't buy tickets")
             }
+
+            // send ticket payment to icp contract
+            let status = (await tokenCanister.transfer(caller.toString(), lotteryCanister, amountToPay).call()).Ok;   
             
             // if payment successfull
             if(status){
