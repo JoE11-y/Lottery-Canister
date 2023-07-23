@@ -2,6 +2,14 @@
 
 Simple lottery caninster built on the ICP network
 
+## To Test
+
+- Initialize lottery with the duration in nanoseconds and the ticket price you want
+- First step is to start the lottery
+- To buy tickets you'll need the dummy tokens from the faucet, you can only get 100 tokens at a time.
+- Wait for lottery duration to run out, then end the lottery which selects the winning ticket
+- Then check if you're winner, which pays out dummy token into your balance.
+
 ## DEVELOPMENT
 
 Install Node Version Manager (nvm): To install nvm, execute the following command in your terminal:

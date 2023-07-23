@@ -5,17 +5,20 @@ import { Player, Lottery, lotteryPayload, buyTicketPayload, queryPayload, Token,
 
 const tokenCanister = new Token(
     // input your token canister address
-    Principal.fromText("")
+    Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai")
 );
 
 // input your lottery canister address
-const lotteryCanister = "" 
+const lotteryCanister = "bkyz2-fmaaa-aaaaa-qaaaq-cai" 
+
+// mapping to hold storage information 
+const lotteryStorage = new StableBTreeMap<int32, Lottery>(0, 100, 5_000_000);
 
 // player index mapping to show which lottery they participated in which they hold in tickets
-let playerIndexMap = new StableBTreeMap<Principal, Vec<string>>(0, 100, 1_000_000);
+let playerIndexMap = new StableBTreeMap<Principal, Vec<string>>(1, 100, 1_000_000);
 
 // follow up mapping that connects the player unique id, to player position in lotteries
-let indexToPosnMap = new StableBTreeMap<string, int32>(1, 60, 100)
+let indexToPosnMap = new StableBTreeMap<string, int32>(2, 60, 100)
 
 // custom configuration settings
 let currlotteryId : Opt<int32> = Opt.None;
@@ -27,9 +30,6 @@ let ticketPrice : Opt<nat64> = Opt.None;
 let lotteryDuration: Opt<nat64> = Opt.None;
 
 let prizePool: Opt<nat64> = Opt.None;
-
-// mapping to hold storage information 
-const lotteryStorage = new StableBTreeMap<int32, Lottery>(2, 100, 5_000_000);
 
 // for some reason $init doesn't work
 $update
@@ -187,9 +187,9 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
                         Some: (list) => list,
                         None: () => empty
                 })
-                
-                let playerInfos: Player[] = lottery.players;
 
+                let playerInfos: Player[] = lottery.players;
+                
                 // check if player's participation array is empty
                 if(playerIdMap.length == 0){
                     // if empty create new information for player
@@ -205,6 +205,7 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
                     let playerInfo = generatePlayerInformation(id, caller, newPlayerPosn, ticketNumbers)
                     playerInfos.push(playerInfo)
                 }else{
+                    
                     let playerPosn: int32;
                     let uniqueId: string = "";
 
@@ -223,10 +224,8 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
                         None: () => 0
                     })
 
-                    // console.log(playerPosn)
-                    // console.log(uniqueId)
-
-                    // check if unique id not present or playerPosn is 0
+                    // check if unique id not present or playerPosn is 0 i.e hasn't bought a ticket in this lottery session
+                    // but has bought a ticket in a previous lottery session
                     if(uniqueId == "" && playerPosn == 0){
                         // generate new id and update the player mapping informations
                         let newId = `${uuidv4() + idTrack}`;
@@ -238,7 +237,8 @@ export async function buyTicket(payload: buyTicketPayload): Promise<Result<strin
                         playerInfos.push(playerInfo)
                     }else{
                         // else just add ticketNumbers to player tickets array
-                        playerInfos[playerPosn].tickets = [...playerInfos[playerPosn].tickets, ...ticketNumbers];
+                        let playerTickets = playerInfos[playerPosn - 1].tickets;
+                        playerInfos[playerPosn - 1].tickets = playerTickets.concat(ticketNumbers);
                     }
                 }
 
@@ -279,7 +279,7 @@ export async function endLottery(payload: queryPayload): Promise<Result<string, 
     })
 
     // check that lottery state is still open
-    if(state !== 0){
+    if(state !== 1){
         ic.trap("wrong lottery state")
     }
 
@@ -288,13 +288,13 @@ export async function endLottery(payload: queryPayload): Promise<Result<string, 
         Some: async (lottery) => {
 
             // check if lottery has ended
-            if(lottery.endTime < ic.time()){
+            if(lottery.endTime > ic.time()){
                 ic.trap("lottery not yet over")
             }
             
             // get random number as winning tickets
             let ticketsSold = lottery.noOfTickets;
-            const randomValue = Math.random() * (ticketsSold - 0) + 0;
+            const randomValue = Math.random() * ticketsSold;
             let winningTicket = Math.floor(randomValue)
 
             // update record in storage and set lottery completed status to 1 i.e. waiting for payouts
@@ -371,7 +371,7 @@ export async function checkIfWinner(payload: queryPayload): Promise<Result<strin
             }
 
             // else continue and get player info
-            const playerInfo = lottery.players[playerPosn];
+            const playerInfo = lottery.players[playerPosn - 1];
 
             // check if player tickets for that lottery contains the winning ticket
             if(playerInfo.tickets.includes(lottery.winningTicket)){
@@ -390,7 +390,7 @@ export async function checkIfWinner(payload: queryPayload): Promise<Result<strin
             };
 
             lotteryStorage.insert(lottery.id, updatedLottery);
-            return Result.Ok<string, string>("Winner paid out")
+            return Result.Ok<string, string>("Congrats you're the winner check your balance")
         },
         None: () => Result.Err<string, string>(`Error check for payour in lottery with id=${id}.`)
     });
