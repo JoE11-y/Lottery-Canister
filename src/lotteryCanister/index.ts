@@ -5,11 +5,11 @@ import { Player, Lottery, lotteryPayload, buyTicketPayload, queryPayload, Token,
 
 const tokenCanister = new Token(
     // input your token canister address
-    Principal.fromText("bd3sg-teaaa-aaaaa-qaaba-cai")
+    Principal.fromText("")
 );
 
 // input your lottery canister address
-const lotteryCanister = "bkyz2-fmaaa-aaaaa-qaaaq-cai" 
+const lotteryCanister = "" 
 
 // mapping to hold storage information 
 const lotteryStorage = new StableBTreeMap<int32, Lottery>(0, 100, 5_000_000);
