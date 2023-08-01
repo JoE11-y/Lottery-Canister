@@ -50,16 +50,31 @@ Simple lottery caninster built on the ICP network
 - Copy yours from the output on the terminal
 
 - Open on your webpage
+
+    ![image](./src/assets/webpage.png)
   
 - Initialize lottery with the duration in nanoseconds and the ticket price you want
 
-- First step is to start the lottery
+    ![image](./src/assets/intialize.gif)
+  
+- Next step is to start the lottery
 
-- To buy tickets you'll need the dummy tokens from the faucet, you can only get 100 tokens at a time.
+   ![image](./src/assets/startLottery.gif)
+
+To buy tickets you'll need the dummy tokens from the faucet, you can only get 100 tokens at a time.
+
+- So use the `getFaucetTokens` function to get the dummy tokens
+
+   ![image](./src/assets/faucet.gif)
+
+- Then buy the no of tickets you need using `buyTicket` function
+
+    ![image](./src/assets/buyTicket.gif)
 
 - Wait for lottery duration to run out, then end the lottery which selects the winning ticket
 
-- Then check if you're winner, which pays out dummy token into your balance.
+   ![image](./src/assets/endLottery.gif)
 
+- Then check if you're winner with the `checkIfWinner` function, which pays out dummy token into your balance.
 
-This deploy command builds, and installs the canister.
+   ![image](./src/assets/checkIfWinner.gif)
