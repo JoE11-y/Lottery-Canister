@@ -1,6 +1,14 @@
 # Lottery
 
-Simple lottery caninster built on the ICP network
+Simple lottery caninster built on the ICP network,
+
+- It allows any player to be able to start the lottery, buy tickets and even end the lottery.
+- Players can then check to see if they're the lucky winners of that lottery.
+- Winner gets half of the prizepool.
+
+## Token Canister
+
+Due to the nature of ICP requiring a ledger to be set up to allow for payments between users and canisters. I came up with a workaround inspiration from the ICP examples repository and the knowledge to erc20 tokens. To set up another side by side canister called the token canister which follows the erc20 implementation that allows for simple transfers of token between users and canisters. Then used cross canister calls to allow the lottery canister to be able to use the token canister to manage it's users fund i.e accepting payments and paying out users.
 
 ## To Test
 
